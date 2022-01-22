@@ -1,0 +1,9 @@
+mode: set
+WarmAPI/models/candidate.go:48.57,57.2 5 1
+WarmAPI/models/candidate.go:60.61,67.28 5 1
+WarmAPI/models/candidate.go:71.2,71.24 1 1
+WarmAPI/models/candidate.go:67.28,69.3 1 1
+WarmAPI/models/candidate.go:75.70,82.28 5 1
+WarmAPI/models/candidate.go:86.2,86.24 1 1
+WarmAPI/models/candidate.go:82.28,84.3 1 1
+WarmAPI/models/candidate.go:90.60,96.2 4 1

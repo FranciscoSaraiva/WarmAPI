@@ -1,0 +1,386 @@
+
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<style>
+			body {
+				background: black;
+				color: rgb(80, 80, 80);
+			}
+			body, pre, #legend span {
+				font-family: Menlo, monospace;
+				font-weight: bold;
+			}
+			#topbar {
+				background: black;
+				position: fixed;
+				top: 0; left: 0; right: 0;
+				height: 42px;
+				border-bottom: 1px solid rgb(80, 80, 80);
+			}
+			#content {
+				margin-top: 50px;
+			}
+			#nav, #legend {
+				float: left;
+				margin-left: 10px;
+			}
+			#legend {
+				margin-top: 12px;
+			}
+			#nav {
+				margin-top: 10px;
+			}
+			#legend span {
+				margin: 0 5px;
+			}
+			.cov0 { color: rgb(192, 0, 0) }
+.cov1 { color: rgb(128, 128, 128) }
+.cov2 { color: rgb(116, 140, 131) }
+.cov3 { color: rgb(104, 152, 134) }
+.cov4 { color: rgb(92, 164, 137) }
+.cov5 { color: rgb(80, 176, 140) }
+.cov6 { color: rgb(68, 188, 143) }
+.cov7 { color: rgb(56, 200, 146) }
+.cov8 { color: rgb(44, 212, 149) }
+.cov9 { color: rgb(32, 224, 152) }
+.cov10 { color: rgb(20, 236, 155) }
+
+		</style>
+	</head>
+	<body>
+		<div id="topbar">
+			<div id="nav">
+				<select id="files">
+				
+				<option value="file0">WarmAPI/handlers/handler.go (100.0%)</option>
+				
+				</select>
+			</div>
+			<div id="legend">
+				<span>not tracked</span>
+			
+				<span class="cov0">not covered</span>
+				<span class="cov8">covered</span>
+			
+			</div>
+		</div>
+		<div id="content">
+		
+		<pre class="file" id="file0" style="display: none">package handlers
+
+import (
+        "encoding/json"
+        "fmt"
+        "io/ioutil"
+        "net/http"
+        "strconv"
+        "time"
+
+        "WarmAPI/config"
+        "WarmAPI/models"
+
+        "github.com/julienschmidt/httprouter"
+)
+
+// WarmResponse that represents the response in the JSON requests.
+type WarmResponse struct {
+        Message   string                       `json:"message"`
+        Status    int                          `json:"status"`
+        Candidate *models.ChallengerCandidate  `json:"candidate,omitempty"`
+        Data      []models.ChallengerCandidate `json:"data,omitempty"`
+}
+
+/*
+*        Public Functions
+ */
+
+// RetrieveCandidates function that handles the endpoint for retrieving all the candidates
+// inside the database.
+func RetrieveCandidates(w http.ResponseWriter, _ *http.Request, _ httprouter.Params) <span class="cov8" title="1">{
+        w.WriteHeader(http.StatusOK)
+
+        candidates, _ := models.GetAllCandidates()
+        fmt.Printf("%v", len(*candidates))
+        if len(*candidates) == 0 </span><span class="cov8" title="1">{
+                w.WriteHeader(http.StatusNotFound)
+                jsonResp, err := json.Marshal(
+                        WarmResponse{
+                                Message: "No candidates were found.",
+                                Status:  http.StatusNotFound})
+                config.CheckError(err)
+                fmt.Fprintf(w, "%s", jsonResp)
+                return
+        }</span>
+
+        <span class="cov8" title="1">data := []models.ChallengerCandidate{}
+
+        for _, v := range *candidates </span><span class="cov8" title="1">{
+                data = append(data, v)
+        }</span>
+
+        <span class="cov8" title="1">jsonResp, _ := json.Marshal(
+                WarmResponse{
+                        Message: "Retrieve Candidates",
+                        Status:  http.StatusOK,
+                        Data:    data})
+
+        fmt.Fprintf(w, "%s", jsonResp)</span>
+}
+
+// RetrieveCandidateID function that handles the endpoint for retrieving a certain candidate
+// via his ID in the database.
+func RetrieveCandidateID(w http.ResponseWriter, _ *http.Request, p httprouter.Params) <span class="cov8" title="1">{
+
+        candidateID := p.ByName("id")
+
+        if !checkIDOnlyNumbers(candidateID) </span><span class="cov8" title="1">{
+                w.WriteHeader(http.StatusBadRequest)
+                jsonResp, err := json.Marshal(
+                        WarmResponse{
+                                Message: "The id must be all numbers",
+                                Status:  http.StatusBadRequest})
+                config.CheckError(err)
+                fmt.Fprintf(w, "%s", jsonResp)
+                return
+        }</span>
+
+        <span class="cov8" title="1">id, _ := strconv.Atoi(candidateID)
+
+        candidate, err := models.GetCandidateByID(id)
+        if config.CheckError(err) </span><span class="cov8" title="1">{
+                w.WriteHeader(http.StatusNotFound)
+                jsonResp, err := json.Marshal(
+                        WarmResponse{
+                                Message: "Candidate not found",
+                                Status:  http.StatusNotFound})
+                config.CheckError(err)
+                fmt.Fprintf(w, "%s", jsonResp)
+                return
+        }</span>
+
+        <span class="cov8" title="1">w.WriteHeader(http.StatusOK)
+        jsonResp, err := json.Marshal(
+                WarmResponse{
+                        Message:   "Candidate Retrieved",
+                        Status:    http.StatusOK,
+                        Candidate: candidate,
+                })
+        config.CheckError(err)
+        fmt.Fprintf(w, "%s", jsonResp)
+        return</span>
+}
+
+// RetrieveCandidate function that handles the endpoint for retrieving a certain candidate
+// via its email either in the database, or via requesting the Greenhouse Harvest API.
+func RetrieveCandidate(w http.ResponseWriter, r *http.Request, _ httprouter.Params) <span class="cov8" title="1">{
+        defer r.Body.Close()
+        testStruct := make(map[string]interface{})
+
+        //Empty body verification
+        body, err := ioutil.ReadAll(r.Body)
+        config.CheckError(err)
+        if len(body) == 0 </span><span class="cov8" title="1">{
+                w.WriteHeader(http.StatusBadRequest)
+                jsonResp, err := json.Marshal(WarmResponse{Message: "The Json body is empty", Status: http.StatusBadRequest})
+                config.CheckError(err)
+                fmt.Fprintf(w, "%s", jsonResp)
+                return
+        }</span>
+
+        //Empty object verification
+        <span class="cov8" title="1">err = json.Unmarshal(body, &amp;testStruct)
+        if len(testStruct) == 0 </span><span class="cov8" title="1">{
+                w.WriteHeader(http.StatusBadRequest)
+                jsonResp, err := json.Marshal(WarmResponse{Message: "The Json object is empty", Status: http.StatusBadRequest})
+                config.CheckError(err)
+                fmt.Fprintf(w, "%s", jsonResp)
+                return
+        }</span>
+
+        //Empty email field
+        <span class="cov8" title="1">if len(testStruct["email"].(string)) == 0 </span><span class="cov8" title="1">{
+                w.WriteHeader(http.StatusBadRequest)
+                jsonResp, err := json.Marshal(WarmResponse{Message: "The email of the candidate is empty", Status: http.StatusBadRequest})
+                config.CheckError(err)
+                fmt.Fprintf(w, "%s", jsonResp)
+                return
+        }</span>
+
+        /***
+        * FINDING THE CANDIDATE WITHIN THE DATABASE
+        ****/
+        <span class="cov8" title="1">fmt.Printf("\n\n ** CHECKING THE DATABASE ** \n\n")
+
+        candidate, err := models.GetCandidateByEmail(testStruct["email"].(string))
+        // If the candidate was found within the database
+        if !config.CheckError(err) </span><span class="cov8" title="1">{
+                w.WriteHeader(http.StatusOK)
+                jsonResp, err := json.Marshal(
+                        WarmResponse{
+                                Message:   "Retrieved candidate",
+                                Status:    http.StatusOK,
+                                Candidate: candidate})
+                config.CheckError(err)
+                fmt.Fprintf(w, "%s", jsonResp)
+                fmt.Printf("%s", jsonResp)
+                return
+        }</span>
+
+        <span class="cov8" title="1">fmt.Printf("\n\n ** CHECKING THE HARVEST API ** \n\n")
+        /***
+        * FINDING THE CANDIDATE WITHIN THE HARVEST API
+        ****/
+        challengerCandidate := &amp;models.ChallengerCandidate{}
+        pageCount := 0
+        for </span><span class="cov8" title="1">{
+                if challengerCandidate.ID == 0 </span><span class="cov8" title="1">{
+                        fmt.Printf("Candidate still not found, moving to page [%d]", pageCount+1)
+                        pageCount++
+                        client := &amp;http.Client{}
+                        req, _ := http.NewRequest("GET",
+                                config.HarvestURL+
+                                        config.PerPageParam+"500&amp;"+
+                                        config.PageParam+strconv.Itoa(pageCount)+"&amp;"+
+                                        config.CreatedAfterParam+config.GetDateForRequest(5),
+                                nil)
+                        fmt.Printf("\nURL: %s", req.URL)
+                        req.SetBasicAuth("1a466133e09f2e2c700f867ead70b002", "")
+                        reply, _ := client.Do(req)
+                        fmt.Printf("\n Request Arrived!")
+
+                        candidates := []models.Candidate{}
+
+                        defer reply.Body.Close()
+                        body, err := ioutil.ReadAll(reply.Body)
+                        config.CheckError(err)
+
+                        fmt.Printf("body: %d", len(body))
+
+                        if len(body) == 2 </span><span class="cov8" title="1">{ // 2 because it's empty with "[]"
+                                w.WriteHeader(http.StatusNotFound)
+                                jsonResp, err := json.Marshal(
+                                        WarmResponse{
+                                                Message: "No candidate was found within the Greenhouse database.",
+                                                Status:  http.StatusNotFound})
+                                config.CheckError(err)
+                                fmt.Fprintf(w, "%s", jsonResp)
+                                return
+                        }</span>
+
+                        <span class="cov8" title="1">json.Unmarshal(body, &amp;candidates)
+
+                        for _, candidate := range candidates </span><span class="cov8" title="1">{
+                                for _, email := range candidate.EmailAddresses </span><span class="cov8" title="1">{
+                                        time.Sleep(5 * time.Millisecond)
+                                        fmt.Printf("\nComparing Emails: -&gt; [%s] - [%s]", email, testStruct["email"])
+                                        if email.Value == testStruct["email"] </span><span class="cov8" title="1">{
+                                                fmt.Printf("\n\n-----&gt; EMAIL [%s] FOUND &lt;------\n\n", testStruct["email"])
+
+                                                challengerCandidate = convertCandidateToChallenger(&amp;candidate)
+                                                models.InsertCandidate(challengerCandidate)
+
+                                                time.Sleep(1 * time.Second)
+                                                w.WriteHeader(http.StatusOK)
+                                                jsonResp, err := json.Marshal(
+                                                        WarmResponse{
+                                                                Message:   "Retrieved candidate",
+                                                                Status:    http.StatusOK,
+                                                                Candidate: challengerCandidate})
+                                                config.CheckError(err)
+                                                fmt.Fprintf(w, "%s", jsonResp)
+                                                fmt.Printf("%s", jsonResp)
+                                                return
+                                        }</span>
+                                }
+                        }
+                        <span class="cov8" title="1">fmt.Printf("\n\n ****************************** \n\n")
+                        fmt.Printf(" ** &gt; PAGE [%d] ENDED &lt; **", pageCount)
+                        fmt.Printf("\n\n ****************************** \n\n")</span>
+                } /*else {
+                        time.Sleep(1 * time.Second)
+                        w.WriteHeader(http.StatusNotFound)
+                        jsonResp, err := json.Marshal(
+                                WarmResponse{
+                                        Message:   "Retrieved candidate",
+                                        Status:    http.StatusNotFound,
+                                        Candidate: challengerCandidate})
+                        config.CheckError(err)
+                        fmt.Fprintf(w, "%s", jsonResp)
+
+                        return
+                }*/
+        }
+}
+
+/*
+*        Private Functions
+ */
+
+// checkIDOnlyNumbers function that checks if the id of the candidate only has numbers in its string.
+func checkIDOnlyNumbers(id string) bool <span class="cov8" title="1">{
+        for _, v := range id </span><span class="cov8" title="1">{
+                if v &gt;= 'a' &amp;&amp; v &lt;= 'z' || v &gt;= 'A' &amp;&amp; v &lt;= 'Z' </span><span class="cov8" title="1">{
+                        return false
+                }</span>
+        }
+        <span class="cov8" title="1">return true</span>
+}
+
+// convertCandidateToChallenger function that converts a candidate in the struct type Candidate
+// to the struct type ChallengerCandidate.
+func convertCandidateToChallenger(candidate *models.Candidate) *models.ChallengerCandidate <span class="cov8" title="1">{
+        challengerCandidate := models.ChallengerCandidate{}
+        var application struct {
+                Job    string `json:"job,omitempty"`
+                Status string `json:"status,omitempty"`
+        }
+
+        challengerCandidate.ID = candidate.ID
+        challengerCandidate.FirstName = candidate.FirstName
+        challengerCandidate.LastName = candidate.LastName
+        challengerCandidate.EmailAddress = candidate.EmailAddresses[0].Value //first email of the candidate
+
+        for _, apps := range candidate.Applications </span><span class="cov8" title="1">{
+                application.Status = apps.Status
+                for _, jobs := range apps.Jobs </span><span class="cov8" title="1">{
+                        application.Job = jobs.Name
+                }</span>
+                <span class="cov8" title="1">challengerCandidate.Applications = append(challengerCandidate.Applications, application)</span>
+        }
+
+        <span class="cov8" title="1">return &amp;challengerCandidate</span>
+}
+</pre>
+		
+		</div>
+	</body>
+	<script>
+	(function() {
+		var files = document.getElementById('files');
+		var visible;
+		files.addEventListener('change', onChange, false);
+		function select(part) {
+			if (visible)
+				visible.style.display = 'none';
+			visible = document.getElementById(part);
+			if (!visible)
+				return;
+			files.value = part;
+			visible.style.display = 'block';
+			location.hash = part;
+		}
+		function onChange() {
+			select(files.value);
+			window.scrollTo(0, 0);
+		}
+		if (location.hash != "") {
+			select(location.hash.substr(1));
+		}
+		if (!visible) {
+			select("file0");
+		}
+	})();
+	</script>
+</html>
